@@ -231,7 +231,90 @@ function edit_scene_dialog(scene_id) {
 		$("#scene_selector_toggle").click();
 	});
 	
+	var dupe_button = $("<button>Duplicate Scene</button>");
 
+	dupe_button.click(function() {
+		f.find("input").each(function() {
+			var n = $(this).attr('name');
+			let nValue = $(this).val();
+
+			if ( ((n === 'player_map') || (n==='dm_map'))   
+					&& nValue.startsWith("https://drive.google.com")
+					&& nValue.indexOf("uc?id=") < 0
+			) {
+				nValue = 'https://drive.google.com/uc?id=' + nValue.split('/')[5];
+			}
+
+			scene[n] = nValue;
+			console.log('setto ' + n + ' a ' + $(this).val());
+		});
+		//copy the scene token and all 
+		duped_scene = JSON.parse(JSON.stringify(scene))
+		//make a new unique id. 
+		duped_scene.id = uuid()
+		
+		
+		var duped_tokens = JSON.parse(JSON.stringify(window.TOKEN_OBJECTS))
+		scenes_count = window.ScenesHandler.scenes.length
+		
+		console.log(window)
+		console.log(window.TOKEN_OBJECTS)
+		console.log(window.ScenesHandler.scenes)
+		console.log(duped_tokens)
+
+		if (confirm("Duplicate Scene: "+duped_scene.title+"? This will copy tokens from the CURRENT DM scene, and will move the DM to the new scene.")){
+			duped_scene.title += ' (Duplicated)'
+			window.ScenesHandler.scenes.push(duped_scene)
+			if(window.CLOUD){
+				window.ScenesHandler.persist_scene(window.ScenesHandler.scenes.length -1,true);
+				window.ScenesHandler.scenes.find(x => x.id === duped_scene.id).tokens = duped_tokens
+			}
+			else{
+				window.ScenesHandler.persist();
+			}
+
+			let msg={
+				sceneId:duped_scene.id,
+				switch_dm: true
+			};
+			window.MB.sendMessage("custom/myVTT/switch_scene",msg);
+
+			$("#edit_dialog").remove();
+			$("#scene_selector").removeAttr("disabled");
+			$("#scene_selector_toggle").click();
+			$("#scene_selector_toggle").click();// Reopen?
+			//This is needed to ensure that the scene is created before we switch too it... otherwise stuff won't be copied... 
+			// 1s might not be fast enough for everyone though?
+			setTimeout(function (){
+				window.MB.sendMessage("custom/myVTT/switch_scene",msg);
+			}, 1000); // How long you want the delay to be, measured in milliseconds.
+			
+			//console.log(duped_tokens)
+			//console.log('WINDOW')
+			//console.log(window)
+			//console.log(window.TOKEN_OBJECTS)
+
+			Object.values(duped_tokens).forEach(token => {
+				//Switch again? Just in case we have loaded yet? This way we at least get some of the tokens even if we miss some? 
+				window.MB.sendMessage("custom/myVTT/switch_scene",msg);
+				if (!token == undefined || token.options.monster > 0){ // only allow copy/paste for monster tokens, and protect against pasting deleted tokens
+					let options = Object.assign({}, token.options);
+					let newId = uuid();
+
+					options.id = newId;
+					window.ScenesHandler.create_update_token(options);
+					// deselect the old and select the new so the user can easily move the new tokens around after pasting them
+					window.TOKEN_OBJECTS[newId].place_sync_persist();
+				}
+			})
+			console.log(window.TOKEN_OBJECTS)
+		
+			//$("#edit_dialog").remove();
+			//$("#scene_selector").removeAttr("disabled");
+			//$("#scene_selector_toggle").click();
+			//$("#scene_selector_toggle").click();// Reopen?
+		}
+	});
 	
 
 
@@ -741,6 +824,7 @@ function edit_scene_dialog(scene_id) {
 
 
 	f.append(sub);
+	f.append(dupe_button)
 	f.append(cancel);
 	f.append(hide_all_button);
 	//		f.append(export_grid);
@@ -765,8 +849,9 @@ function refresh_scenes() {
 		var scene = window.ScenesHandler.scenes[i];
 		var newobj = $("<div class='scene' data-scene-index='"+i+"'/>");
 
-
-		title = $("<div class='scene_title' style='text-align:center;'/>");
+		// Adds a background to the title of the scene... this looks okay, but could be tricky ensuring the text actually shows up on every map.
+		// Also maybe there's a way to load a lower res image? to not bog things down on a little cosmetics. 
+		title = $("<div class='scene_title' style='text-align:center; background:url("+scene.player_map+"); background-size: cover;'/>");
 		title.html(scene.title);
 
 		if ( (i == window.ScenesHandler.current_scene_id)   && (!window.CLOUD))
