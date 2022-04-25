@@ -1338,6 +1338,161 @@ function default_options() {
 	};
 }
 
+function token_button(e, tokenIndex = null, tokenTotal = null) {
+	console.log(e.target.outerHTML);
+	let imgsrc = parse_img($(e.target).attr("data-img"));
+	if (imgsrc.startsWith("data:")){
+		alert("WARNING! Support for token urls that starts with data: will be removed soon (as they can cause problems). Please find an image with url that begins with http:// or https://");
+	}
+	let id;
+	let centerX = $(window).scrollLeft() + Math.round(+$(window).width() / 2) - 200;
+	let centerY = $(window).scrollTop() + Math.round($(window).height() / 2) - 200;
+
+	centerX = Math.round(centerX * (1.0 / window.ZOOM));
+	centerY = Math.round(centerY * (1.0 / window.ZOOM));
+
+	if( $(e.target).attr("data-top"))
+		centerY=$(e.target).attr("data-top");
+	if( $(e.target).attr("data-left"))
+		centerX=$(e.target).attr("data-left");
+	id = $(e.target).attr('data-set-token-id');
+	if (typeof (id) === "undefined") {
+		id = uuid();
+	}
+
+	// if this is a player token, check if the token is already on the map
+	if(id in window.TOKEN_OBJECTS){
+		if(window.TOKEN_OBJECTS[id].isPlayer())
+		{
+			window.TOKEN_OBJECTS[id].highlight();
+			return;
+		}
+	}
+	
+	let options = default_options();
+	options.id = id;
+	options.imgsrc = imgsrc;
+	options.left = `${centerX}px`;
+	options.top = `${centerY}px`;
+	
+	if(typeof $(e.target).attr('data-stat') !== "undefined"){ // APPLY SAVED TOKEN SETTINGS ONLY FOR MONSTERS
+		for(let o in window.TOKEN_SETTINGS){
+				if(window.TOKEN_SETTINGS[o]){
+					options[o]="1";
+				}
+		}
+	}
+	
+	if ($(e.target).attr('data-size')) {
+		options.size = $(e.target).attr('data-size');
+	}
+
+	if ($(e.target).attr('data-disablestat')) {
+		options.disablestat = $(e.target).attr('data-disablestat');
+	}
+
+	if ($(e.target).attr('data-hidestat')) {
+		options.hidestat = $(e.target).attr('data-hidestat');
+	}
+	
+	if ($(e.target).attr('data-disableborder')) {
+		options.disableborder = $(e.target).attr('data-disableborder');
+	}
+	
+	if ($(e.target).attr('data-square')=="1") {
+		options.square = true;
+	}
+
+	if ($(e.target).attr('data-hp')) {
+		options.hp = $(e.target).attr('data-hp');
+	}
+
+	if ($(e.target).attr('data-maxhp')) {
+		options.max_hp = $(e.target).attr('data-maxhp');
+	}
+
+	if ($(e.target).attr('data-ac')) {
+		options.ac = $(e.target).attr('data-ac');
+	}
+
+	if ($(e.target).attr('data-elev')) {
+		options.elev = $(e.target).attr('data-elev');
+	}
+
+
+	if ($(e.target).attr('data-hidden')) {
+		options.hidden = true;
+	}
+
+	if ($(e.target).attr('data-revealname')) {
+		options.revealname = true;
+	}
+
+	if (typeof $(e.target).attr('data-stat') !== "undefined") {
+		options.monster = $(e.target).attr('data-stat');
+	}
+
+	if (options.monster || options.id.includes("/")) {
+		// monsters and players should use the global setting as the default
+		options.legacyaspectratio = window.TOKEN_SETTINGS['legacyaspectratio'];
+	} else if ($(e.target).attr('data-legacyaspectratio') == true || $(e.target).attr('data-legacyaspectratio') == 'true' || $(e.target).attr('data-legacyaspectratio') == undefined) {
+		// this is a custom token. It should use the setting that was defined when it was created
+		// if the option is undefined, this token was created before the option existed and should therefore use the legacy behavior
+		// if the option is true, the user actively enabled the option.
+		// if the option is false, then we want to preserve aspect ratio
+		options.legacyaspectratio = true;
+	}
+
+
+	if ($(e.target).attr('data-name')) {
+		options.name = $(e.target).attr('data-name');
+		if (options.monster > 0) { // ADD number to the end of named monsters
+			var count = 1;
+			for (var tokenid in window.TOKEN_OBJECTS) {
+				if (window.TOKEN_OBJECTS[tokenid].options.monster == options.monster)
+					count++;
+			}
+			if (count > 1) {
+				console.log("Count " + count);
+				options.name = $(e.target).attr('data-name') + " " + count;
+				options.color = "#" + TOKEN_COLORS[(count - 1) % 54];
+			}
+		}
+
+		let specifiedCustomImg = $(e.target).data('custom-img');
+		if (specifiedCustomImg != undefined && specifiedCustomImg.length > 0) {
+			// the user has specifically chosen a custom image so use it
+			options.imgsrc = specifiedCustomImg;
+		} else {
+			// if there are custom images defined, use those instead of the default DDB image
+			let customImgs = get_custom_monster_images($(e.target).attr('data-stat'));
+			if (customImgs != undefined && customImgs.length > 0) {
+				let randomIndex = getRandomInt(0, customImgs.length);
+				options.imgsrc = customImgs[randomIndex];
+			}
+		}
+	}
+
+	if (typeof $(e.target).attr('data-color') !== "undefined") {
+		options.color = $(e.target).attr('data-color');
+	}
+
+	if (tokenIndex !== null && tokenTotal !== null) {
+		options.left = (centerX + (((options.size || 68.33) * 5) / 2) * Math.cos(2 * Math.PI * tokenIndex / tokenTotal)) + 'px';
+		options.top = (centerY + (((options.size || 68.33) * 5) / 2) * Math.sin(2 * Math.PI * tokenIndex / tokenTotal)) + 'px';
+	}
+
+	//options = Object.assign({}, options, window.TOKEN_SETTINGS);
+	window.ScenesHandler.create_update_token(options);
+
+	if (id in window.PLAYER_STATS) {
+		window.MB.handlePlayerData(window.PLAYER_STATS[id]);
+	}
+
+	window.MB.sendMessage('custom/myVTT/token', options);
+
+}
+
 function place_token_in_center_of_map(tokenObject) {
 	let centerX = $(window).scrollLeft() + Math.round(+$(window).width() / 2) - 200;
 	let centerY = $(window).scrollTop() + Math.round($(window).height() / 2) - 200;
@@ -1474,7 +1629,11 @@ function menu_callback(key, options, event) {
 		}
 		
 	}
-	
+	if (key == 'quick_roll_menu') {
+		open_roll_menu(event)
+		id = $(this).attr('data-id');
+		add_to_roll_menu(window.TOKEN_OBJECTS[id])						
+	}
 
 	if (key == "token_combat") {
 		id = $(this).attr('data-id');
@@ -1635,6 +1794,13 @@ function multiple_callback(key, options, event) {
 		
 		window.ScenesHandler.persist();
 		window.ScenesHandler.sync();
+	}
+	if (key == 'group_roll') {
+		open_roll_menu(event)
+		$("#tokens .tokenselected").each(function() {
+			id = $(this).attr('data-id');
+			add_to_roll_menu(window.TOKEN_OBJECTS[id])
+		});							
 	}
 }
 
@@ -1873,6 +2039,7 @@ function token_menu() {
 							icon: 'person-add',
 							className: "material-icon"
 						},
+						group_roll: { name: 'Quick Group Roll' },
 						token_hidden: build_hide_show_item(window.CURRENTLY_SELECTED_TOKENS),
 						conditions: {
 							name: 'Conditions',
@@ -1965,6 +2132,9 @@ function token_menu() {
 								note_edit: {name: 'Create/Edit Note'},
 								note_delete: {name: 'Delete Note'},
 							}
+						},
+						quick_roll_menu: { 
+							name: 'Quick Roll Menu' 
 						},
 						sep1: "-------",
 						hp: {
@@ -2078,6 +2248,7 @@ function token_menu() {
 					if (!id.endsWith(window.PLAYER_ID)) {
 						delete ret.items.sep3;
 						delete ret.items.imgsrcSelect;
+						delete ret.items.quick_roll_menu
 					}
 				}
 
@@ -2545,4 +2716,359 @@ function undo_delete_tokens() {
 		}
 	}
 	window.TOKEN_OBJECTS_RECENTLY_DELETED = {};
+}
+
+function open_roll_menu(e) {
+	//opens a roll menu for group rolls 
+	console.log("Opening Roll menu")
+	$("#group_roll_dialog").remove();
+
+	roll_dialog = $("<div id='group_roll_dialog'></div>");
+	roll_dialog.css('background', "url('/content/1-0-1487-0/skins/waterdeep/images/mon-summary/paper-texture.png')");
+	roll_dialog.css('overflow', 'auto');
+	roll_dialog.css('width', '400px');
+	roll_dialog.css('top', e.clientY+'px');
+	roll_dialog.css('left', e.clientX+'px');
+	roll_dialog.css('height', '250px');
+	roll_dialog.css('z-index', 100);
+	roll_dialog.css('border', 'solid 2px #ddd');
+	roll_dialog.css('display', 'flex');
+	roll_dialog.css('margin', '1px 1px')
+	roll_dialog.css('flex-direction', 'column');
+	roll_dialog.addClass("moveableWindow");
+	$(roll_dialog).draggable();
+	$(roll_dialog).resizable();
+
+	$("#tokens").append(roll_dialog);
+
+	roll_dialog.empty();
+
+	roll_menu_header = $("<div id='roll_menu_header' class=roll_menu_header ></div>");
+	roll_menu_dc_input = $('<input id="save_dc" placeholder="Save DC" name="save_dc" title="Enter the value for the DC of the saving throw."></input>')
+	roll_menu_dc_input.tooltip();
+
+	const roll_title_bar_exit=$('<div id="combat_tracker_title_bar_exit"><svg class="" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><g transform="rotate(-45 50 50)"><rect></rect></g><g transform="rotate(45 50 50)"><rect></rect></g></svg></div>')
+	roll_title_bar_exit.click(function(){roll_dialog.remove()});
+	roll_menu_header.append(roll_title_bar_exit);
+
+	save_type_dropdown = $('<select id="save_dropdown" onchange="save_type_change(this)" title="Select the type of saving throw to be made. ">Save Type</select>')
+	save_type_dropdown.append($('<option value="2">Dexterity</option>')) 
+	save_type_dropdown.append($('<option value="4">Wisdom</option>'))
+	save_type_dropdown.append($('<option value="3">Constitution</option>'))
+	save_type_dropdown.append($('<option value="1">Strength</option>'))
+	save_type_dropdown.append($('<option value="5">Intelligence</option>'))
+	save_type_dropdown.append($('<option value="6">Charisma</option>'))
+	save_type_dropdown.tooltip()
+	damage_input  = $('<input id="damage_failed_save" placeholder="Damage/Roll" title="Enter the integer value for damage or the roll to be made i.e. 8d6"></input>')
+	damage_input.tooltip()
+	half_damage_input = $('<input id="half_damage_save" placeholder="Success Damage" title="Enter the integer value for half damage, or autopopulate from damage entry as half rounded down.""></input>')
+	half_damage_input.tooltip()
+
+	damage_input.change(function(){
+		//console.log(this.value)
+		_dmg = $('#damage_failed_save').val();
+		if (_dmg.includes('d')) {
+			var expression = _dmg
+			console.log(expression)
+			var roll = new rpgDiceRoller.DiceRoll(expression);
+			console.log(expression + "->" + roll.total);
+			//reassign to the input 
+			_dmg = roll.total
+			$('#damage_failed_save').val(_dmg);
+		}
+		else {
+			_dmg.replace(/[^\d.-]/g, '')
+		}
+		$("#half_damage_save").val(Math.floor(_dmg/2));
+	});
+
+	roll_menu_footer = $("<div id='roll_menu_footer' class=roll_menu_footer/>");
+	roll_menu_footer.append(roll_menu_dc_input)
+	roll_menu_footer.append(damage_input)
+	roll_menu_footer.append(half_damage_input)
+	roll_menu_footer.append(save_type_dropdown)
+
+	let roll_form = $("<form />");
+	roll_menu_body = $("<div id='roll_menu_body' class='roll_menu_body'></div>");
+
+	//roll_menu_body.append($('<span> Use +- for custom bonus, add a "A" or "D" for Adv/Disadv </span>'))
+	roll_menu_body.append(roll_form)
+
+	roll_button=$('<button class="rollSavesButton" title="Roll saves with current settings."><svg class="rollSVG" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 339.09 383.21"><path d="M192.91,3q79.74,45.59,159.52,91.1c4.9,2.79,7.05,6,7,11.86q-.29,87.76,0,175.52c0,5.14-1.79,8.28-6.19,10.85q-78.35,45.75-156.53,91.78c-4.75,2.8-8.81,2.8-13.57,0q-77.7-45.75-155.59-91.18c-5.17-3-7.2-6.52-7.18-12.56q.31-87.39,0-174.78c0-5.5,2.06-8.64,6.7-11.28q80-45.53,159.84-91.3ZM115.66,136h3.67c12.1,0,24.19-.05,36.29,0,5.24,0,8.38,3.15,8.34,8s-3.56,8-9.73,8c-11.85.08-23.69,0-35.54,0-4.14,0-4.21.16-2.11,3.8q35.54,61.53,71.09,123.06c.59,1,.82,2.7,2.32,2.62s1.66-1.7,2.25-2.74q35.47-61.35,70.9-122.74c2.3-4,2.31-4-2.5-4-11.72,0-23.45.06-35.17,0-6.18-.05-9.6-3.08-9.59-8.1,0-5.18,3.27-7.9,9.58-7.91,11.47,0,22.94,0,34.42,0,1.27,0,2.71.54,3.93-.63a11.49,11.49,0,0,0-.69-1.36q-35.49-53-71-106c-2.15-3.22-3.2-1.77-4.7.46q-35.06,52.36-70.19,104.71C116.82,133.87,116.44,134.63,115.66,136Zm89,153.29c1.51,0,2.25.06,3,0,12.51-1.17,25-2.39,37.53-3.54,14.75-1.35,29.5-2.61,44.25-4,15.11-1.39,30.22-2.89,45.34-4.25,4.39-.39,4.47-.32,2.46-4.21q-10.79-20.94-21.61-41.87-17.31-33.56-34.64-67.11c-.49-1-.69-2.45-1.9-2.57s-1.48,1.46-2.14,2.31a9.38,9.38,0,0,0-.56,1q-27.49,47.6-55,95.2C215.87,269.75,210.42,279.24,204.62,289.31Zm-29.49.12c-1-1.84-1.57-3.05-2.24-4.22Q154,252.49,135.13,219.79,119.05,191.94,103,164.1c-.53-.91-.8-2.38-2.13-2.32-1.1.05-1.29,1.39-1.73,2.24Q70.69,219,42.3,274c-1.35,2.6-.88,3.39,2.09,3.56,6.71.38,13.4,1.06,20.09,1.68q23,2.11,46.08,4.27c12.26,1.15,24.53,2.34,36.79,3.47C156.37,287.81,165.4,288.57,175.13,289.43ZM44.49,102.78c1.34.83,2.16,1.37,3,1.86C63,113.46,78.55,122.19,94,131.17c3.21,1.88,4.7,1.46,6.75-1.63Q131,83.87,161.64,38.39c.66-1,1.64-1.84,1.8-3.6Zm172.2-67.85-.38.49c.31.53.58,1.08.93,1.59q30.94,46.15,61.84,92.33c2.12,3.18,3.67,3.68,7,1.72,15.4-9,31-17.7,46.45-26.54.8-.45,1.95-.58,2.22-2.08ZM36,250l.72.09C37.84,248,39,246,40.05,243.86Q64.23,197,88.47,150.12c1.35-2.6.68-3.58-1.6-4.86C71.21,136.48,55.62,127.56,40,118.7c-4-2.25-4-2.22-4,2.29V250Zm307.45.82a12.72,12.72,0,0,0,.35-1.55q0-64.51.06-129c0-3.33-1.17-3.17-3.5-1.85Q316.51,132,292.56,145.51c-2.11,1.18-2.42,2.21-1.29,4.38q18.11,34.83,36,69.76C332.56,229.83,337.84,240,343.46,250.84ZM64.23,295.22l-.14.56,47.09,27.59q33.88,19.86,67.78,39.7c1.11.64,3.21,3.18,3.21-.87,0-17.71,0-35.42,0-53.13,0-2.21-1-3.17-3.09-3.36q-17.29-1.51-34.59-3.07-18.22-1.63-36.45-3.29Q86.15,297.33,64.23,295.22Zm252.49,0c-11.13,1-21.24,2-31.37,2.92-12.15,1.1-24.31,2.1-36.46,3.21-15.62,1.41-31.23,3-46.86,4.26-3.38.27-4.46,1.44-4.43,4.8.14,16.84.06,33.68.07,50.52,0,4.1,0,4.1,3.73,1.93L286,313.28C296,307.43,305.91,301.56,316.72,295.2Z" transform="translate(-20.37 -3.01)"/><path d="M197.64,143.89a7.9,7.9,0,0,1-7.72,8,7.81,7.81,0,0,1-7.73-7.93,7.73,7.73,0,1,1,15.45,0Z" transform="translate(-20.37 -3.01)"/></svg></button>');
+	roll_button.tooltip()
+	roll_button.click(function() {
+
+		$('#roll_menu_footer').children('#apply_damage').show()
+		$("#roll_menu_body").children('tr').each(function (){
+			let x = window.TOKEN_OBJECTS[$(this).attr('data-target')]
+			let y = $(this).children('input');
+
+			save_drop = $("#roll_menu_footer").children('select')
+			
+			if(x.options.monster > 0){
+				score_bonus = Math.floor((x.options.ability_scores[save_drop.val()] - 10) /2 )
+				if (x.options.saving_throws[save_drop.val()]){
+					score_bonus += x.options.prof_bonus
+				}
+			}
+			else {
+				var ability_names = {0: 'null', 1: 'strength', 2: 'dexterity', 3:'constitution', 4:'wisdom', 5:'intelligence', 6:'charisma'}
+				ability_name = ability_names[save_drop.val()]
+				score_bonus = x.options[`${ability_name}_save`]
+			}
+			
+			if (score_bonus >= 0){
+				score_bonus = "+"+score_bonus;
+			}
+			console.log(score_bonus)
+			dice = '1d20';
+			if (y.val().includes('+') == true || y.val().includes('-') == true){
+				var modifier = y.val().toLowerCase()
+				if (modifier.includes("a") == true) {
+					modifier = modifier.replace(/[^\d.-]/g, '');
+					dice = '2d20kh1 +';
+				}
+				else if (modifier.includes("d") == true) {
+					modifier = modifier.replace(/[^\d.-]/g, '');
+					dice = '2d20kl1 +';
+				}
+			}
+			else {
+				var modifier = score_bonus
+			}
+			
+			var expression = dice + modifier;
+			console.log(expression)
+			var roll = new rpgDiceRoller.DiceRoll(expression);
+			console.log(expression + "->" + roll.total);
+			//reassign to the input 
+			y.val(roll.total);
+			//display a Save success or failure.
+			save_dc = $("#roll_menu_footer").children('#save_dc').val()
+			console.log($("#roll_menu_footer"))
+			console.log($("#roll_menu_footer").children('#save_dc'))
+			console.log(save_dc)
+			pass_fail_label = $(this).children('#save_fail_label')[0]
+			$(pass_fail_label).show()
+
+			if (save_dc != ""){
+				if (parseInt(roll.total) >= parseInt(save_dc)){
+					pass_fail_label.innerHTML = '  Success!'
+					$(pass_fail_label).css('background', 'green')
+				}
+				else {
+					pass_fail_label.innerHTML = '  Fail!'
+					$(pass_fail_label).css('background', 'red')
+				}
+			}
+			else {//if not defined apply full damage.
+				pass_fail_label.innerHTML = '  No DC (Auto-Fail)'
+				$(pass_fail_label).css('background', 'yellow')
+			}
+
+		});
+	});
+	
+	update_hp = $("<button id=apply_damage style='margin: 1px 1px; font-size:14px;'> Apply Damage </button>");
+	update_hp.click(function() {
+		$("#roll_menu_body").children('tr').each(function (){
+			update_hp=$(this).children("#hp");
+			let rolled_value = $(this).children('input').val();
+			//if (!rolled_value.includes('+') && !rolled_value.includes('-')) {}
+			let x = window.TOKEN_OBJECTS[$(this).attr('data-target')]
+			damage_failed_save = $("#roll_menu_footer").children('#damage_failed_save').val()
+			half_damage_save_success = $("#roll_menu_footer").children('#half_damage_save').val()
+
+			damage_failed_save = damage_failed_save.replace(/[^\d.-]/g, '');
+			half_damage_save_success = half_damage_save_success.replace(/[^\d.-]/g, '');
+
+			save_dc = $("#roll_menu_footer").children('#save_dc').val()
+
+			if (save_dc != "undefined"){
+				if (parseInt(rolled_value) >= parseInt(save_dc)){
+					x.options.hp -= half_damage_save_success
+					damage = half_damage_save_success
+				}
+				else {
+					x.options.hp -= damage_failed_save
+					damage = damage_failed_save
+				}
+			}
+			//if not defined apply full damage.
+			else {
+				x.options.hp -= damage_failed_save
+				damage = damage_failed_save
+			}
+			if(x.options.monster > 0){
+				x.place()
+				update_hp.text(x.options.hp);
+			}
+			else {
+				// doing it this way, because Players might also have resistances or abilites and they should manage their own HP. 
+				var msgdata = {
+					player: window.PLAYER_NAME,
+					img: window.PLAYER_IMG,
+					text: x.options.name + " takes " + damage +" damage (adjust manually)",	
+				};
+				window.MB.inject_chat(msgdata);
+				x.place()
+			}
+		});
+	});
+
+
+	roll_menu_footer.append(roll_button);
+	roll_menu_footer.append(update_hp);
+
+	roll_dialog.append(roll_menu_header);
+	roll_dialog.append(roll_menu_body);
+	roll_dialog.append(roll_menu_footer);
+
+	roll_dialog.css('opacity', '0.0');
+	roll_dialog.animate({
+		opacity: '1.0'
+	}, 1000);
+}
+
+function add_to_roll_menu(token) {
+	//Adds a specific target to the roll menu
+
+	//console.log(token);
+	roll_menu_entry=$("<tr/>");
+	roll_menu_entry.css("height","30px");
+	roll_menu_entry.attr("data-target", token.options.id);	
+
+	img=$("<img width=42 height=42 class='Avatar_AvatarPortrait__2dP8u'>");
+	img.attr('src',token.options.imgsrc);
+	img.css('border','3px solid '+token.options.color);
+	img.css('margin', '2px 2px');
+	roll_menu_entry.append($("<td/>").append(img));
+
+	//if its a monster it needs to be calulated.
+	if(token.options.monster > 0){
+		console.log(token.options.ability_scores)
+		score_bonus = Math.floor((token.options.ability_scores[2] - 10) /2 )
+		if (token.options.saving_throws[2]){
+			score_bonus += token.options.prof_bonus
+		}
+		if (score_bonus >= 0){
+			score_bonus = "+"+score_bonus;
+		}
+	}
+	else {//if its a player character they have the save stored.
+		score_bonus = token.options.dexterity_save
+		if (score_bonus >= 0){
+			score_bonus = "+"+score_bonus;
+		}
+	}
+
+	name_line = $("<div style='width:100px;'>"+token.options.name+"</div>")
+
+	bonus_input = $(`<input id=bonus_input type='roll_menu_roll' style='font-size:12px; margin: 1px 1px;' title='Use +- for custom bonus, add a "A" or "D" for Adv/Disadv'> </input>`);
+	bonus_input.css('width','30px');
+	bonus_input.css('-webkit-appearance','none');
+	//bonus_input.tooltip()
+	bonus_input.val(score_bonus);
+
+	hp=$("<div class='hp'></div>");
+	hp.text(token.options.hp);
+	hp.css('font-size','12px');
+
+	roll_menu_entry.append(name_line);
+	roll_menu_entry.append($("<td/>").append(hp));
+
+	max_hp=$("<div/>");
+	max_hp.text("/"+token.options.max_hp);
+	max_hp.css('font-size','12px');
+
+	roll_menu_entry.append($("<td/>").append(max_hp));
+
+	find=$('<button class="findTokenCombatButton" style="font-size:10px;"><svg class="findSVG" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="#000000"><path d="M0 0h24v24H0z" fill="none"/><path d="M12 11c1.33 0 4 .67 4 2v.16c-.97 1.12-2.4 1.84-4 1.84s-3.03-.72-4-1.84V13c0-1.33 2.67-2 4-2zm0-1c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm6 .2C18 6.57 15.35 4 12 4s-6 2.57-6 6.2c0 2.34 1.95 5.44 6 9.14 4.05-3.7 6-6.8 6-9.14zM12 2c4.2 0 8 3.22 8 8.2 0 3.32-2.67 7.25-8 11.8-5.33-4.55-8-8.48-8-11.8C4 5.22 7.8 2 12 2z"/></svg></button>');
+	find.click(function(){
+		var target=$(this).parent().parent().attr('data-target');
+		if(target in window.TOKEN_OBJECTS){
+			window.TOKEN_OBJECTS[target].highlight();
+		}
+	});
+	roll_menu_entry.append(bonus_input)
+	roll_menu_entry.append(find);
+
+	remove_from_list=$('<button class="removeTokenCombatButton" style="font-size:10px;"><svg class="delSVG" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="#000000"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M16 9v10H8V9h8m-1.5-6h-5l-1 1H5v2h14V4h-3.5l-1-1zM18 7H6v12c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7z"/></svg></button>');
+	//remove_from_list.tooltip()
+	remove_from_list.click(
+		function() {
+			console.log('Removing from list')
+			$(this).parent().remove();
+		}
+	);
+	
+	roll_menu_entry.append(remove_from_list);
+
+	if(token.isMonster()){
+		stat=$('<button class="openSheetCombatButton" style="font-size:10px;"><svg class="statSVG" xmlns="http://www.w3.org/2000/svg" enable-background="new 0 0 24 24" height="24px" viewBox="0 0 24 24" width="24px" fill="#000000"><g><rect fill="none" height="24" width="24"/><g><path d="M19,5v14H5V5H19 M19,3H5C3.9,3,3,3.9,3,5v14c0,1.1,0.9,2,2,2h14c1.1,0,2-0.9,2-2V5C21,3.9,20.1,3,19,3L19,3z"/></g><path d="M14,17H7v-2h7V17z M17,13H7v-2h10V13z M17,9H7V7h10V9z"/></g></svg></button>');
+		
+		stat.click(function(){
+			if (encounter_builder_dice_supported()) {
+				console.log(`attempting to open monster with monsterId ${token.options.monster} and tokenId ${token.options.id}`);
+				open_monster_stat_block_with_id(token.options.monster, token.options.id);
+			} else {
+				iframe_id="#iframe-monster-"+token.options.monster;
+				if($(iframe_id).is(":visible")) {
+					$(iframe_id).hide();
+				} else {
+					$(".monster_frame").hide();
+					load_monster_stat(token.options.monster, token.options.id);
+				}
+			}
+		});
+		if(window.DM)
+			roll_menu_entry.append(stat);
+		
+	}	
+	else if (token.isPlayer()) {
+		stat=$('<button class="openSheetCombatButton" style="font-size:10px;"><svg class="statSVG" xmlns="http://www.w3.org/2000/svg" enable-background="new 0 0 24 24" height="24px" viewBox="0 0 24 24" width="24px" fill="#000000"><g><rect fill="none" height="24" width="24"/><g><path d="M19,5v14H5V5H19 M19,3H5C3.9,3,3,3.9,3,5v14c0,1.1,0.9,2,2,2h14c1.1,0,2-0.9,2-2V5C21,3.9,20.1,3,19,3L19,3z"/></g><path d="M14,17H7v-2h7V17z M17,13H7v-2h10V13z M17,9H7V7h10V9z"/></g></svg></button>');
+		stat.click(function(){
+			open_player_sheet(token.options.id);
+		});
+		if(window.DM)
+			roll_menu_entry.append(stat);
+	}
+
+	roll_menu_entry.append("<div id=save_fail_label> </div>")
+
+	//$("#group_roll_dialog").append(roll_menu_entry)
+	$("#roll_menu_body").append(roll_menu_entry)
+}
+
+function save_type_change(dropdown) {
+	var ability_names = {0: 'null', 1: 'strength', 2: 'dexterity', 3:'constitution', 4:'wisdom', 5:'intelligence', 6:'charisma'}
+	console.log("Save type is: "+ dropdown.value );
+	//$('#roll_menu_footer').children('#apply_damage').hide()
+	//$('#group_roll_dialog').children('tr').each(function () {
+	$('#roll_menu_body').children('tr').each(function () {
+		let x = window.TOKEN_OBJECTS[$(this).attr('data-target')]
+		if(x.options.monster > 0){
+			score_bonus = Math.floor((x.options.ability_scores[dropdown.value] - 10) /2 )
+			if (x.options.saving_throws[dropdown.value]){
+				score_bonus += x.options.prof_bonus
+			}
+			if (score_bonus >= 0){
+				score_bonus = "+"+score_bonus;
+			}
+		}
+		else {
+			ability_name = ability_names[dropdown.value]
+			score_bonus = x.options[`${ability_name}_save`]
+			if (score_bonus >= 0){
+				score_bonus = "+"+score_bonus;
+			}
+		}
+		let label = $(this).children('#save_fail_label')
+		$(label).hide()
+
+		//console.log($(this).children('input'))
+		$(this).children('input').val(score_bonus);
+
+
+	});
 }
