@@ -242,7 +242,9 @@ function token_context_menu_expanded(tokenIds, e) {
 		let quickRollMenu = $("<button class='material-icons open-menu'>Add/Remove from Quick Rolls</button>")
 		body.append(quickRollMenu);
 		quickRollMenu.on("click", function(clickEvent){
-			$("#qrm_dialog").show()
+			if(!childWindows['Quick Roll Menu']){
+				$("#qrm_dialog").show()
+			}
 			if ($('#quick_roll_area').length == 0){
 				close_token_context_menu()
 				open_quick_roll_menu(e)
@@ -257,7 +259,10 @@ function token_context_menu_expanded(tokenIds, e) {
 					}
 				})
 			})
-		})
+			if(childWindows['Quick Roll Menu']){
+				qrm_update_popout();
+			}
+		});
 	}
 	// End Quick Group Roll 
 	let toTopMenuButton = $("<button class='material-icons to-top'>Move to Top</button>");
@@ -1783,7 +1788,22 @@ function open_quick_roll_menu(e){
 	save_type_dropdown.append($(`<option value="5" data-name="cha" data-style='url(https://www.dndbeyond.com/content/1-0-1849-0/skins/waterdeep/images/icons/abilities/charisma.svg)'>Charisma</option>`))
 	//save_type_dropdown.tooltip({show: { duration: 1000 }})
 	save_type_dropdown.attr('style', 'width: 22% !important');
-
+	
+	$( function() {
+		$.widget( "custom.iconselectmenu", $.ui.selectmenu, {
+		_renderItem: function( ul, item ) {
+			var li = $( `<li class='icon-avatar' >` )
+			wrapper = $( "<div>", { text: item.label } );
+			$( "<li>", {
+			style: 'background-image: ' + item.element.attr( "data-style" ),
+			"class": "ui-icon " + item.element.attr( "data-class" )}).appendTo(wrapper);
+			return li.append( wrapper ).appendTo( ul );
+		}
+		});
+		$("#qrm_save_dropdown")
+		.iconselectmenu({ change: function( event, ui ) { save_type_change(this); }})
+    		.addClass( "ui-menu-icons" );
+	});
 
 	let damage_input  = $('<input class="menu_roll_input" id="hp_adjustment_failed_save" placeholder="Damage/Roll" title="Enter the integer value for damage or the roll to be made i.e. 8d6"></input>')
 	//damage_input.tooltip({show: { duration: 1000 }})
@@ -1932,7 +1952,22 @@ function open_quick_roll_menu(e){
 		}
 	});
 	
-
+	$( function() {
+		$.widget( "custom.iconselectmenu", $.ui.selectmenu, {
+		_renderItem: function( ul, item ) {
+			var li = $( `<li class='icon-avatar' >` )
+			wrapper = $( "<div>", { text: item.label } );
+			$( "<li>", {
+			style: item.element.attr( "data-style" ),
+			"class": "ui-icon " + item.element.attr( "data-class" )}).appendTo(wrapper);
+			return li.append( wrapper ).appendTo( ul );
+		}
+		});
+		$("#qrm_apply_conditions")
+		.iconselectmenu()
+    	.iconselectmenu( "menuWidget")
+    		.addClass( "ui-menu-icons" );
+	});
 	
 	let apply_adjustments = $('<button title="Apply Damage/Healing and Conditions on failed save" id="qrm_apply_adjustments" class="general_input"> Apply </button>')
 	apply_adjustments.click(function() {
@@ -2371,7 +2406,8 @@ function qrm_update_popout(){
 	if(childWindows['Quick Roll Menu']){
 		updatePopoutWindow("Quick Roll Menu", $("#qrm_dialog"));
 		removeFromPopoutWindow("Quick Roll Menu", "#quick_roll_title_bar");
-	
+		removeFromPopoutWindow("Quick Roll Menu", "#qrm_save_dropdown-button");
+		removeFromPopoutWindow("Quick Roll Menu", "#qrm_apply_conditions-button")
 		$(childWindows['Quick Roll Menu'].document).find("#qrm_dialog").css({
 			'display': 'block',
 			'top': '0',
@@ -2381,6 +2417,7 @@ function qrm_update_popout(){
 			'width': '100%',
 			'height': '100%'
 		});
+		$(childWindows['Quick Roll Menu'].document).find(".general_input").css('display', '');
 		console.log('Update QRM popout');
 		$(childWindows['Quick Roll Menu'].document).find('#qrm_dialog #quick_roll_area input#qrm_hp').change(function(e) {
 			let id = $(this).parent().parent().attr("data-target");			
